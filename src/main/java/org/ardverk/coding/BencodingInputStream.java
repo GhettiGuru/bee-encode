@@ -47,7 +47,7 @@ public class BencodingInputStream extends PushbackInputStream implements DataInp
       } else if (token == BencodingUtils.NUMBER) {
         return in.readNumber();
       } else if (isDigit(token)) {
-        byte[] data = in.raw();
+        byte[] data = in.readBytes();
         return in.decodeAsString ? new String(data, in.charset) : data;
       } else {
         return in.readCustom();
@@ -130,10 +130,6 @@ public class BencodingInputStream extends PushbackInputStream implements DataInp
     return value;
   }
   
-  private byte[] raw() throws IOException {
-    return raw(pop());
-  }
-  
   private byte[] raw(int length) throws IOException {
     byte[] data = new byte[length];
     readFully(data);
@@ -148,14 +144,24 @@ public class BencodingInputStream extends PushbackInputStream implements DataInp
   }
   
   public byte[] readBytes() throws IOException {
-    StringBuilder sb = new StringBuilder();
-    
-    int value = -1;
-    while ((value = pop()) != BencodingUtils.LENGTH_DELIMITER) {
-      sb.append((char)value);
-    }
-    
-    return raw(Integer.parseInt(sb.toString()));
+		int token = pop();
+		if (token == -1) {
+			throw new EOFException();
+		}
+
+		return readBytes(token);
+  }
+  
+  private byte[] readBytes(int token) throws IOException {
+  	StringBuilder sb = new StringBuilder();
+  	sb.append((char)token);
+  	
+  	int value = -1;
+  	while ((value = pop()) != BencodingUtils.LENGTH_DELIMITER) {
+  		sb.append((char)value);
+  	}
+  	
+  	return raw(Integer.parseInt(sb.toString()));
   }
   
   /**
@@ -312,7 +318,7 @@ public class BencodingInputStream extends PushbackInputStream implements DataInp
     check(BencodingUtils.DICTIONARY);
     
     while (peek() != BencodingUtils.EOF) {
-      String key = new String(raw(), charset);
+      String key = readString();
       T value = readObject(factory);
       dst.put(key, value);
     }
