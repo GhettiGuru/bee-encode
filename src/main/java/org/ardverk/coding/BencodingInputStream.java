@@ -35,10 +35,10 @@ import java.util.TreeMap;
  *
  * <p>Bencoding formats:</p>
  * <ul>
- *   <li>Dictionary: <code>d&lt;key&gt;&lt;value&gt;e</code></li>
- *   <li>List: <code>l&lt;value&gt;e</code></li>
- *   <li>Integer: <code>i&lt;number&gt;e</code></li>
- *   <li>Byte strings: <code>&lt;length&gt;:&lt;string&gt;</code></li>
+ *   <li>Dictionary: <code>{@code d<key><value>e}</code></li>
+ *   <li>List: <code>{@code l<value>e}</code></li>
+ *   <li>Integer: <code>{@code i<number>e}</code></li>
+ *   <li>Byte strings: <code>{@code <length>:<string>}</code></li>
  * </ul>
  */
 public class BencodingInputStream extends PushbackInputStream implements DataInput {
@@ -122,9 +122,6 @@ public class BencodingInputStream extends PushbackInputStream implements DataInp
         }
     }
 
-    /**
-     * Reads a byte string according to Bencoding format: <code>&lt;length&gt;:&lt;string&gt;</code>
-     */
     public byte[] readBytes() throws IOException {
         int token = pop();
         if (token == -1) {
@@ -136,10 +133,12 @@ public class BencodingInputStream extends PushbackInputStream implements DataInp
     private byte[] readBytes(int token) throws IOException {
         StringBuilder sb = new StringBuilder();
         sb.append((char) token);
+
         int value;
         while ((value = pop()) != BencodingUtils.LENGTH_DELIMITER) {
             sb.append((char) value);
         }
+
         return raw(Integer.parseInt(sb.toString()));
     }
 
@@ -167,20 +166,20 @@ public class BencodingInputStream extends PushbackInputStream implements DataInp
         return Enum.valueOf(clazz, readString());
     }
 
-    /**
-     * Reads and returns a {@link Number} according to Bencoding format: <code>i&lt;number&gt;e</code>
-     */
     public Number readNumber() throws IOException {
         check(BencodingUtils.NUMBER);
+
         StringBuilder sb = new StringBuilder();
         boolean decimal = false;
         int token;
+
         while ((token = pop()) != BencodingUtils.EOF) {
             if (token == '.') {
                 decimal = true;
             }
             sb.append((char) token);
         }
+
         try {
             if (decimal) {
                 return new BigDecimal(sb.toString());
@@ -218,9 +217,11 @@ public class BencodingInputStream extends PushbackInputStream implements DataInp
 
     public <E, T extends Collection<E>> T readCollection(T dst, ObjectFactory<? extends E> factory) throws IOException {
         check(BencodingUtils.LIST);
+
         while (peek() != BencodingUtils.EOF) {
             dst.add(readObject(factory));
         }
+
         pop(); // Consume the EOF
         return dst;
     }
@@ -239,11 +240,13 @@ public class BencodingInputStream extends PushbackInputStream implements DataInp
 
     public <T> Map<String, T> readMap(Map<String, T> dst, ObjectFactory<? extends T> factory) throws IOException {
         check(BencodingUtils.DICTIONARY);
+
         while (peek() != BencodingUtils.EOF) {
             String key = readString();
             T value = readObject(factory);
             dst.put(key, value);
         }
+
         pop(); // consume the EOF
         return dst;
     }
