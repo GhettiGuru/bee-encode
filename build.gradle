@@ -5,7 +5,7 @@ plugins {
     id 'eclipse'
 }
 
-group = 'org.ardverk'
+group = 'resinous.space'
 version = '0.3-SNAPSHOT'
 
 repositories {
