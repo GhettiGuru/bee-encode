@@ -5,44 +5,8 @@ plugins {
     id 'eclipse'
 }
 
-import groovy.json.JsonSlurper
-import java.text.SimpleDateFormat
-
 group = 'com.github.GhettiGuru'
-
-// Base version
-def baseVersion = '0.3'
-def ghUsername = System.getenv("GH_USERNAME")
-def ghToken = System.getenv("GH_TOKEN")
-def repoName = 'bee-encode'
-
-// Function to check if version exists in GitHub Packages
-def versionExists(version) {
-    if (!ghToken) return false
-    try {
-        def apiUrl = "https://api.github.com/orgs/${ghUsername}/packages/maven/${repoName}/versions"
-        def connection = new URL(apiUrl).openConnection()
-        connection.setRequestProperty("Authorization", "token ${ghToken}")
-        connection.setRequestProperty("Accept", "application/vnd.github.v3+json")
-        def response = new JsonSlurper().parse(connection.inputStream)
-        return response.any { it.name == version }
-    } catch(Exception e) {
-        println "Warning: Could not check GitHub Packages: ${e.message}"
-        return false
-    }
-}
-
-// Set project version: append timestamp if base version exists
-def finalVersion = baseVersion
-if (versionExists(baseVersion)) {
-    def timestamp = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date())
-    finalVersion = "${baseVersion}-${timestamp}"
-    println "Version ${baseVersion} already exists. Using new version: ${finalVersion}"
-} else {
-    println "Using version: ${finalVersion}"
-}
-
-version = finalVersion
+version = '0.3'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -67,28 +31,27 @@ dependencies {
     testImplementation "junit:junit:4.+"
 }
 
+// Read secrets from environment
+def ghUsername = System.getenv("GH_USERNAME")
+def ghToken = System.getenv("GH_TOKEN")
+
 publishing {
     publications {
         mavenJava(MavenPublication) {
             from components.java
             groupId = 'com.github.GhettiGuru'
-            artifactId = repoName
+            artifactId = 'bee-encode'
             version = project.version
         }
     }
     repositories {
         maven {
             name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/${ghUsername}/${repoName}")
+            url = uri("https://maven.pkg.github.com/GhettiGuru/bee-encode")
             credentials {
-                username = ghUsername
-                password = ghToken
+                username = ghUsername ?: ""
+                password = ghToken ?: ""
             }
         }
     }
-}
-
-// Ensure publishing only runs if GH_TOKEN exists
-tasks.named('publishMavenJavaPublicationToGitHubPackagesRepository') {
-    onlyIf { ghToken != null }
 }
