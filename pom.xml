@@ -6,23 +6,23 @@
   
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <scm.uri>scm:git:git@github.com:rkapsi/bee-encode.git</scm.uri>
+    <scm.uri>scm:git:git@github.com:GhettiGuru/bee-encode.git</scm.uri>
   </properties>
   
-  <groupId>org.ardverk</groupId>
+  <groupId>resinous.space</groupId>
   <artifactId>bee-encode</artifactId>
   <version>0.3-SNAPSHOT</version>
   <packaging>jar</packaging>
-  <url>https://github.com/rkapsi/bee-encode</url>
+  <url>https://github.com/GhettiGuru/bee-encode</url>
   
   <distributionManagement>
     <repository>
-      <id>ardverk-release</id>
-      <url>scp://mvn.ardverk.org/repository/release</url>
+      <id>ResinOS-release</id>
+      <url>scp://mvn.resinous.space/repository/release</url>
     </repository>
     <snapshotRepository>
       <id>ardverk-snapshot</id>
-      <url>scp://mvn.ardverk.org/repository/snapshot</url>
+      <url>scp://mvn.resinous.space/repository/snapshot</url>
     </snapshotRepository>
   </distributionManagement>
   
