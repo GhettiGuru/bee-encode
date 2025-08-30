@@ -50,6 +50,11 @@ publishing {
             version = project.version
 
             artifact tasks.named('sourceJar')
+
+            // Explicit dependency for Gradle 8+
+            tasks.named("generateMetadataFileForMavenJavaPublication") {
+                dependsOn tasks.named("sourceJar")
+            }
         }
     }
 
