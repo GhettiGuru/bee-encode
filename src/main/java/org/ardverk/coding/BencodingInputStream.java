@@ -43,361 +43,298 @@ import java.util.TreeMap;
  */
 public class BencodingInputStream extends PushbackInputStream implements DataInput {
 
-  private static final ObjectFactory<Object> DEFAULT = new ObjectFactory<Object>() {
+    private static final ObjectFactory<Object> DEFAULT = new ObjectFactory<Object>() {
+        @Override
+        public Object read(BencodingInputStream in) throws IOException {
+            int token = in.peek();
+
+            if (token == BencodingUtils.DICTIONARY) {
+                return in.readMap();
+            } else if (token == BencodingUtils.LIST) {
+                return in.readList();
+            } else if (token == BencodingUtils.NUMBER) {
+                return in.readNumber();
+            } else if (isDigit(token)) {
+                byte[] data = in.readBytes();
+                return in.decodeAsString ? new String(data, in.charset) : data;
+            } else {
+                return in.readCustom();
+            }
+        }
+    };
+
+    private final String charset;
+    private final boolean decodeAsString;
+
+    public BencodingInputStream(InputStream in) {
+        this(in, BencodingUtils.UTF_8, false);
+    }
+
+    public BencodingInputStream(InputStream in, String charset) {
+        this(in, charset, false);
+    }
+
+    public BencodingInputStream(InputStream in, boolean decodeAsString) {
+        this(in, BencodingUtils.UTF_8, decodeAsString);
+    }
+
+    public BencodingInputStream(InputStream in, String charset, boolean decodeAsString) {
+        super(in);
+        if (charset == null) {
+            throw new NullPointerException("charset");
+        }
+        this.charset = charset;
+        this.decodeAsString = decodeAsString;
+    }
+
+    public String getCharset() {
+        return charset;
+    }
+
+    public boolean isDecodeAsString() {
+        return decodeAsString;
+    }
+
+    protected int pop() throws IOException {
+        int value = read();
+        if (value == -1) {
+            throw new EOFException();
+        }
+        return value;
+    }
+
+    protected int peek() throws IOException {
+        int value = pop();
+        unread(value);
+        return value;
+    }
+
+    private byte[] raw(int length) throws IOException {
+        byte[] data = new byte[length];
+        readFully(data);
+        return data;
+    }
+
+    private void check(int expected) throws IOException {
+        int actual = pop();
+        if (actual != expected) {
+            throw new IOException("expected=" + expected + ", actual=" + actual);
+        }
+    }
+
+    /**
+     * Reads a byte string according to Bencoding format: <code>&lt;length&gt;:&lt;string&gt;</code>
+     */
+    public byte[] readBytes() throws IOException {
+        int token = pop();
+        if (token == -1) {
+            throw new EOFException();
+        }
+        return readBytes(token);
+    }
+
+    private byte[] readBytes(int token) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        sb.append((char) token);
+        int value;
+        while ((value = pop()) != BencodingUtils.LENGTH_DELIMITER) {
+            sb.append((char) value);
+        }
+        return raw(Integer.parseInt(sb.toString()));
+    }
+
+    public Object readObject() throws IOException {
+        return readObject(DEFAULT);
+    }
+
+    public <T> T readObject(ObjectFactory<? extends T> factory) throws IOException {
+        return factory.read(this);
+    }
+
+    protected Object readCustom() throws IOException {
+        throw new IOException();
+    }
+
+    public String readString() throws IOException {
+        return readString(charset);
+    }
+
+    public String readString(String encoding) throws IOException {
+        return new String(readBytes(), encoding);
+    }
+
+    public <T extends Enum<T>> T readEnum(Class<T> clazz) throws IOException {
+        return Enum.valueOf(clazz, readString());
+    }
+
+    /**
+     * Reads and returns a {@link Number} according to Bencoding format: <code>i&lt;number&gt;e</code>
+     */
+    public Number readNumber() throws IOException {
+        check(BencodingUtils.NUMBER);
+        StringBuilder sb = new StringBuilder();
+        boolean decimal = false;
+        int token;
+        while ((token = pop()) != BencodingUtils.EOF) {
+            if (token == '.') {
+                decimal = true;
+            }
+            sb.append((char) token);
+        }
+        try {
+            if (decimal) {
+                return new BigDecimal(sb.toString());
+            } else {
+                return new BigInteger(sb.toString());
+            }
+        } catch (NumberFormatException err) {
+            throw new IOException("NumberFormatException", err);
+        }
+    }
+
+    public Object[] readArray() throws IOException {
+        return readList().toArray();
+    }
+
+    public <T> T[] readArray(T[] a) throws IOException {
+        return readList().toArray(a);
+    }
+
+    public <T> T[] readArray(ObjectFactory<? extends T> factory, T[] a) throws IOException {
+        return readList(factory).toArray(a);
+    }
+
+    public List<Object> readList() throws IOException {
+        return readList(DEFAULT);
+    }
+
+    public <T> List<T> readList(ObjectFactory<? extends T> factory) throws IOException {
+        return readCollection(new ArrayList<T>(), factory);
+    }
+
+    public <T extends Collection<Object>> T readCollection(T dst) throws IOException {
+        return readCollection(dst, DEFAULT);
+    }
+
+    public <E, T extends Collection<E>> T readCollection(T dst, ObjectFactory<? extends E> factory) throws IOException {
+        check(BencodingUtils.LIST);
+        while (peek() != BencodingUtils.EOF) {
+            dst.add(readObject(factory));
+        }
+        pop(); // Consume the EOF
+        return dst;
+    }
+
+    public Map<String, Object> readMap() throws IOException {
+        return readMap(DEFAULT);
+    }
+
+    public Map<String, Object> readMap(Map<String, Object> dst) throws IOException {
+        return readMap(dst, DEFAULT);
+    }
+
+    public <T> Map<String, T> readMap(ObjectFactory<? extends T> factory) throws IOException {
+        return readMap(new TreeMap<String, T>(), factory);
+    }
+
+    public <T> Map<String, T> readMap(Map<String, T> dst, ObjectFactory<? extends T> factory) throws IOException {
+        check(BencodingUtils.DICTIONARY);
+        while (peek() != BencodingUtils.EOF) {
+            String key = readString();
+            T value = readObject(factory);
+            dst.put(key, value);
+        }
+        pop(); // consume the EOF
+        return dst;
+    }
+
     @Override
-    public Object read(BencodingInputStream in) throws IOException {
-      int token = in.peek();
-
-      if (token == BencodingUtils.DICTIONARY) {
-        return in.readMap();
-      } else if (token == BencodingUtils.LIST) {
-        return in.readList();
-      } else if (token == BencodingUtils.NUMBER) {
-        return in.readNumber();
-      } else if (isDigit(token)) {
-        byte[] data = in.readBytes();
-        return in.decodeAsString ? new String(data, in.charset) : data;
-      } else {
-        return in.readCustom();
-      }
-    }
-  };
-
-  /**
-   * The charset that is being used for {@link String}s.
-   */
-  private final String charset;
-
-  /**
-   * Whether or not all byte arrays should be decoded as {@link String}s.
-   */
-  private final boolean decodeAsString;
-
-  /**
-   * Creates a {@link BencodingInputStream} with the default encoding (UTF-8) and
-   * decodeAsString=false.
-   */
-  public BencodingInputStream(InputStream in) {
-    this(in, BencodingUtils.UTF_8, false);
-  }
-
-  /**
-   * Creates a {@link BencodingInputStream} with the given encoding.
-   */
-  public BencodingInputStream(InputStream in, String charset) {
-    this(in, charset, false);
-  }
-
-  /**
-   * Creates a {@link BencodingInputStream} with the default encoding (UTF-8) and
-   * optionally decoding all byte arrays as {@link String}.
-   */
-  public BencodingInputStream(InputStream in, boolean decodeAsString) {
-    this(in, BencodingUtils.UTF_8, decodeAsString);
-  }
-
-  /**
-   * Creates a {@link BencodingInputStream} with the given encoding and option to
-   * decode all byte arrays as {@link String}.
-   */
-  public BencodingInputStream(InputStream in, String charset, boolean decodeAsString) {
-    super(in);
-
-    if (charset == null) {
-      throw new NullPointerException("charset");
+    public char readChar() throws IOException {
+        return readString().charAt(0);
     }
 
-    this.charset = charset;
-    this.decodeAsString = decodeAsString;
-  }
-
-  /**
-   * Returns the charset used to decode {@link String}s.
-   */
-  public String getCharset() {
-    return charset;
-  }
-
-  /**
-   * Returns true if all byte arrays are being converted into {@link String}s.
-   */
-  public boolean isDecodeAsString() {
-    return decodeAsString;
-  }
-
-  protected int pop() throws IOException {
-    int value = read();
-    if (value == -1) {
-      throw new EOFException();
-    }
-    return value;
-  }
-
-  protected int peek() throws IOException {
-    int value = pop();
-    unread(value);
-    return value;
-  }
-
-  private byte[] raw(int length) throws IOException {
-    byte[] data = new byte[length];
-    readFully(data);
-    return data;
-  }
-
-  private void check(int expected) throws IOException {
-    int actual = pop();
-    if (actual != expected) {
-      throw new IOException("expected=" + expected + ", actual=" + actual);
-    }
-  }
-
-  /**
-   * Reads a byte string according to Bencoding format: <code>&lt;length&gt;:&lt;string&gt;</code>
-   */
-  public byte[] readBytes() throws IOException {
-    int token = pop();
-    if (token == -1) {
-      throw new EOFException();
-    }
-    return readBytes(token);
-  }
-
-  private byte[] readBytes(int token) throws IOException {
-    StringBuilder sb = new StringBuilder();
-    sb.append((char) token);
-
-    int value;
-    while ((value = pop()) != BencodingUtils.LENGTH_DELIMITER) {
-      sb.append((char) value);
+    @Override
+    public boolean readBoolean() throws IOException {
+        return readInt() != 0;
     }
 
-    return raw(Integer.parseInt(sb.toString()));
-  }
-
-  /**
-   * Reads and returns an {@link Object}.
-   */
-  public Object readObject() throws IOException {
-    return readObject(DEFAULT);
-  }
-
-  public <T> T readObject(ObjectFactory<? extends T> factory) throws IOException {
-    return factory.read(this);
-  }
-
-  protected Object readCustom() throws IOException {
-    throw new IOException();
-  }
-
-  /**
-   * Reads and returns a {@link String}.
-   */
-  public String readString() throws IOException {
-    return readString(charset);
-  }
-
-  /**
-   * Reads and returns a {@link String} using the given encoding.
-   */
-  public String readString(String encoding) throws IOException {
-    return new String(readBytes(), encoding);
-  }
-
-  /**
-   * Reads and returns an {@link Enum}.
-   */
-  public <T extends Enum<T>> T readEnum(Class<T> clazz) throws IOException {
-    return Enum.valueOf(clazz, readString());
-  }
-
-  /**
-   * Reads and returns a {@link Number} according to Bencoding format: <code>i&lt;number&gt;e</code>
-   */
-  public Number readNumber() throws IOException {
-    check(BencodingUtils.NUMBER);
-
-    StringBuilder sb = new StringBuilder();
-    boolean decimal = false;
-    int token;
-
-    while ((token = pop()) != BencodingUtils.EOF) {
-      if (token == '.') {
-        decimal = true;
-      }
-      sb.append((char) token);
+    @Override
+    public byte readByte() throws IOException {
+        return readNumber().byteValue();
     }
 
-    try {
-      if (decimal) {
-        return new BigDecimal(sb.toString());
-      } else {
-        return new BigInteger(sb.toString());
-      }
-    } catch (NumberFormatException err) {
-      throw new IOException("NumberFormatException", err);
-    }
-  }
-
-  /**
-   * Reads and returns an array of {@link Object}s.
-   */
-  public Object[] readArray() throws IOException {
-    return readList().toArray();
-  }
-
-  public <T> T[] readArray(T[] a) throws IOException {
-    return readList().toArray(a);
-  }
-
-  public <T> T[] readArray(ObjectFactory<? extends T> factory, T[] a) throws IOException {
-    return readList(factory).toArray(a);
-  }
-
-  /**
-   * Reads and returns a {@link List}.
-   */
-  public List<Object> readList() throws IOException {
-    return readList(DEFAULT);
-  }
-
-  public <T> List<T> readList(ObjectFactory<? extends T> factory) throws IOException {
-    return readCollection(new ArrayList<T>(), factory);
-  }
-
-  /**
-   * Reads and returns a {@link Collection}.
-   */
-  public <T extends Collection<Object>> T readCollection(T dst) throws IOException {
-    return readCollection(dst, DEFAULT);
-  }
-
-  public <E, T extends Collection<E>> T readCollection(T dst, ObjectFactory<? extends E> factory) throws IOException {
-    check(BencodingUtils.LIST);
-
-    while (peek() != BencodingUtils.EOF) {
-      dst.add(readObject(factory));
+    @Override
+    public short readShort() throws IOException {
+        return readNumber().shortValue();
     }
 
-    pop(); // Consume the EOF
-    return dst;
-  }
-
-  /**
-   * Reads and returns a {@link Map}.
-   */
-  public Map<String, Object> readMap() throws IOException {
-    return readMap(DEFAULT);
-  }
-
-  public Map<String, Object> readMap(Map<String, Object> dst) throws IOException {
-    return readMap(dst, DEFAULT);
-  }
-
-  public <T> Map<String, T> readMap(ObjectFactory<? extends T> factory) throws IOException {
-    return readMap(new TreeMap<String, T>(), factory);
-  }
-
-  public <T> Map<String, T> readMap(Map<String, T> dst, ObjectFactory<? extends T> factory) throws IOException {
-    check(BencodingUtils.DICTIONARY);
-
-    while (peek() != BencodingUtils.EOF) {
-      String key = readString();
-      T value = readObject(factory);
-      dst.put(key, value);
+    @Override
+    public int readInt() throws IOException {
+        return readNumber().intValue();
     }
 
-    pop(); // consume the EOF
-    return dst;
-  }
-
-  @Override
-  public char readChar() throws IOException {
-    return readString().charAt(0);
-  }
-
-  @Override
-  public boolean readBoolean() throws IOException {
-    return readInt() != 0;
-  }
-
-  @Override
-  public byte readByte() throws IOException {
-    return readNumber().byteValue();
-  }
-
-  @Override
-  public short readShort() throws IOException {
-    return readNumber().shortValue();
-  }
-
-  @Override
-  public int readInt() throws IOException {
-    return readNumber().intValue();
-  }
-
-  @Override
-  public float readFloat() throws IOException {
-    return readNumber().floatValue();
-  }
-
-  @Override
-  public long readLong() throws IOException {
-    return readNumber().longValue();
-  }
-
-  @Override
-  public double readDouble() throws IOException {
-    return readNumber().doubleValue();
-  }
-
-  @Override
-  public void readFully(byte[] dst) throws IOException {
-    readFully(dst, 0, dst.length);
-  }
-
-  @Override
-  public void readFully(byte[] dst, int off, int len) throws IOException {
-    int total = 0;
-    while (total < len) {
-      int r = read(dst, total, len - total);
-      if (r == -1) {
-        throw new EOFException();
-      }
-      total += r;
+    @Override
+    public float readFloat() throws IOException {
+        return readNumber().floatValue();
     }
-  }
 
-  @Override
-  public String readLine() throws IOException {
-    return readString();
-  }
+    @Override
+    public long readLong() throws IOException {
+        return readNumber().longValue();
+    }
 
-  @Override
-  public int readUnsignedByte() throws IOException {
-    return readByte() & 0xFF;
-  }
+    @Override
+    public double readDouble() throws IOException {
+        return readNumber().doubleValue();
+    }
 
-  @Override
-  public int readUnsignedShort() throws IOException {
-    return readShort() & 0xFFFF;
-  }
+    @Override
+    public void readFully(byte[] dst) throws IOException {
+        readFully(dst, 0, dst.length);
+    }
 
-  @Override
-  public String readUTF() throws IOException {
-    return readString(BencodingUtils.UTF_8);
-  }
+    @Override
+    public void readFully(byte[] dst, int off, int len) throws IOException {
+        int total = 0;
+        while (total < len) {
+            int r = read(dst, total, len - total);
+            if (r == -1) {
+                throw new EOFException();
+            }
+            total += r;
+        }
+    }
 
-  @Override
-  public int skipBytes(int n) throws IOException {
-    return (int) skip(n);
-  }
+    @Override
+    public String readLine() throws IOException {
+        return readString();
+    }
 
-  private static boolean isDigit(int token) {
-    return '0' <= token && token <= '9';
-  }
+    @Override
+    public int readUnsignedByte() throws IOException {
+        return readByte() & 0xFF;
+    }
 
-  public static interface ObjectFactory<T> {
-    public T read(BencodingInputStream in) throws IOException;
-  }
+    @Override
+    public int readUnsignedShort() throws IOException {
+        return readShort() & 0xFFFF;
+    }
+
+    @Override
+    public String readUTF() throws IOException {
+        return readString(BencodingUtils.UTF_8);
+    }
+
+    @Override
+    public int skipBytes(int n) throws IOException {
+        return (int) skip(n);
+    }
+
+    private static boolean isDigit(int token) {
+        return '0' <= token && token <= '9';
+    }
+
+    public static interface ObjectFactory<T> {
+        public T read(BencodingInputStream in) throws IOException;
+    }
 }
