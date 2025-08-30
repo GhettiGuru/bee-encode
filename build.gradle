@@ -11,18 +11,13 @@ version = '0.3'
 java {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
+    withSourcesJar()
     withJavadocJar()
-    withSourcesJar() // automatically generates sources jar
 }
 
 repositories {
     mavenCentral()
     mavenLocal()
-}
-
-dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib"
-    testImplementation "junit:junit:4.+"
 }
 
 tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
@@ -31,24 +26,27 @@ tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
     }
 }
 
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib"
+    testImplementation "junit:junit:4.+"
+}
+
 publishing {
     publications {
         mavenJava(MavenPublication) {
             from components.java
-
             groupId = 'com.github.GhettiGuru'
-            artifactId = 'bee-encode'
+            artifactId = 'bee-encode' // must match repo name
             version = project.version
         }
     }
-
     repositories {
         maven {
             name = "GitHubPackages"
             url = uri("https://maven.pkg.github.com/GhettiGuru/bee-encode")
             credentials {
-                username = findProperty("GH_USERNAME") ?: System.getenv("GH_USERNAME")
-                password = findProperty("GH_TOKEN") ?: System.getenv("GH_TOKEN")
+                username = System.getenv("GH_USERNAME")
+                password = System.getenv("GH_TOKEN")
             }
         }
     }
