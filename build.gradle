@@ -34,15 +34,19 @@ publishing {
     publications {
         mavenJava(MavenPublication) {
             from components.java
-            groupId = project.group
-            artifactId = project.name
-            version = project.version
+            groupId = 'com.github.GhettiGuru'
+            artifactId = 'bee-encode'
+            version = '0.3'
         }
     }
     repositories {
         maven {
-            name = "local"
-            url = uri("${buildDir}/repo") // optional local repo
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/GhettiGuru/bee-encode")
+            credentials {
+                username = findProperty("GH_USERNAME") ?: System.getenv("GH_USERNAME")
+                password = findProperty("GH_TOKEN") ?: System.getenv("GH_TOKEN")
+            }
         }
     }
 }
