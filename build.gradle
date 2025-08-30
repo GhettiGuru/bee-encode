@@ -9,8 +9,8 @@ group = 'resinous.space'
 version = '0.3-SNAPSHOT'
 
 repositories {
-    mavenLocal()
     mavenCentral()
+    mavenLocal()
 }
 
 java {
